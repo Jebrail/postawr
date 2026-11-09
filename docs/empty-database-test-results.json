@@ -1,0 +1,86 @@
+[
+  {
+    "version": "15",
+    "passed": 14,
+    "cases": [
+      "pre-created database requires explicit opt-in",
+      "active sessions rejected and connection access restored",
+      "table and data rejected and preserved",
+      "function in public rejected and preserved",
+      "function in pg_catalog rejected and preserved",
+      "type rejected and preserved",
+      "empty schema rejected and preserved",
+      "extension rejected and preserved",
+      "large object with low OID rejected and preserved",
+      "unrelated owner, role collisions, database settings, and grants rejected",
+      "failed adoption rolls back ownership, roles, metadata, and privileges",
+      "interruption after adoption keeps database closed with resumable provenance",
+      "same database OID, cancellation/resume, repeat, SCRAM, privileges, and collection",
+      "opt-in does not bypass existing provenance checks"
+    ],
+    "seconds": 12.61
+  },
+  {
+    "version": "16",
+    "passed": 14,
+    "cases": [
+      "pre-created database requires explicit opt-in",
+      "active sessions rejected and connection access restored",
+      "table and data rejected and preserved",
+      "function in public rejected and preserved",
+      "function in pg_catalog rejected and preserved",
+      "type rejected and preserved",
+      "empty schema rejected and preserved",
+      "extension rejected and preserved",
+      "large object with low OID rejected and preserved",
+      "unrelated owner, role collisions, database settings, and grants rejected",
+      "failed adoption rolls back ownership, roles, metadata, and privileges",
+      "interruption after adoption keeps database closed with resumable provenance",
+      "same database OID, cancellation/resume, repeat, SCRAM, privileges, and collection",
+      "opt-in does not bypass existing provenance checks"
+    ],
+    "seconds": 11.55
+  },
+  {
+    "version": "17",
+    "passed": 14,
+    "cases": [
+      "pre-created database requires explicit opt-in",
+      "active sessions rejected and connection access restored",
+      "table and data rejected and preserved",
+      "function in public rejected and preserved",
+      "function in pg_catalog rejected and preserved",
+      "type rejected and preserved",
+      "empty schema rejected and preserved",
+      "extension rejected and preserved",
+      "large object with low OID rejected and preserved",
+      "unrelated owner, role collisions, database settings, and grants rejected",
+      "failed adoption rolls back ownership, roles, metadata, and privileges",
+      "interruption after adoption keeps database closed with resumable provenance",
+      "same database OID, cancellation/resume, repeat, SCRAM, privileges, and collection",
+      "opt-in does not bypass existing provenance checks"
+    ],
+    "seconds": 10.61
+  },
+  {
+    "version": "18",
+    "passed": 14,
+    "cases": [
+      "pre-created database requires explicit opt-in",
+      "active sessions rejected and connection access restored",
+      "table and data rejected and preserved",
+      "function in public rejected and preserved",
+      "function in pg_catalog rejected and preserved",
+      "type rejected and preserved",
+      "empty schema rejected and preserved",
+      "extension rejected and preserved",
+      "large object with low OID rejected and preserved",
+      "unrelated owner, role collisions, database settings, and grants rejected",
+      "failed adoption rolls back ownership, roles, metadata, and privileges",
+      "interruption after adoption keeps database closed with resumable provenance",
+      "same database OID, cancellation/resume, repeat, SCRAM, privileges, and collection",
+      "opt-in does not bypass existing provenance checks"
+    ],
+    "seconds": 10.61
+  }
+]

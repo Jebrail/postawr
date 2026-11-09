@@ -1,0 +1,82 @@
+[
+  {
+    "version": "PostgreSQL 15.19 (Ubuntu 15.19-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+    "passed": 13,
+    "cases": [
+      "missing preload rejected before bootstrap",
+      "CREATEDB/CREATEROLE rejected",
+      "concurrent bootstrap serialized",
+      "name collision rejected",
+      "fresh install, TTY cancellation/resume, SCRAM, repeat install",
+      "runtime/reader/PUBLIC least privilege, wrong database, input validation",
+      "two-database workload, lock waits, idle blockers, sampling coverage, version adapters",
+      "HTML escaping, overlapping jobs, timeout atomicity",
+      "reset and intermediate evidence, statement cap, eviction, counter decreases",
+      "restart discontinuity, disabled timing, 1.0 to 1.1 upgrade preserves history/privileges",
+      "password rotation and cancelled rotation recovery",
+      "dump/restore includes partitions and identities; bounded retention; ambiguous provenance rejected",
+      "real physical recovery rejects collectors and permits historical reports"
+    ],
+    "seconds": 67.33
+  },
+  {
+    "version": "PostgreSQL 16.15 (Ubuntu 16.15-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+    "passed": 13,
+    "cases": [
+      "missing preload rejected before bootstrap",
+      "CREATEDB/CREATEROLE rejected",
+      "concurrent bootstrap serialized",
+      "name collision rejected",
+      "fresh install, TTY cancellation/resume, SCRAM, repeat install",
+      "runtime/reader/PUBLIC least privilege, wrong database, input validation",
+      "two-database workload, lock waits, idle blockers, sampling coverage, version adapters",
+      "HTML escaping, overlapping jobs, timeout atomicity",
+      "reset and intermediate evidence, statement cap, eviction, counter decreases",
+      "restart discontinuity, disabled timing, 1.0 to 1.1 upgrade preserves history/privileges",
+      "password rotation and cancelled rotation recovery",
+      "dump/restore includes partitions and identities; bounded retention; ambiguous provenance rejected",
+      "real physical recovery rejects collectors and permits historical reports"
+    ],
+    "seconds": 74.36
+  },
+  {
+    "version": "PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+    "passed": 13,
+    "cases": [
+      "missing preload rejected before bootstrap",
+      "CREATEDB/CREATEROLE rejected",
+      "concurrent bootstrap serialized",
+      "name collision rejected",
+      "fresh install, TTY cancellation/resume, SCRAM, repeat install",
+      "runtime/reader/PUBLIC least privilege, wrong database, input validation",
+      "two-database workload, lock waits, idle blockers, sampling coverage, version adapters",
+      "HTML escaping, overlapping jobs, timeout atomicity",
+      "reset and intermediate evidence, statement cap, eviction, counter decreases",
+      "restart discontinuity, disabled timing, 1.0 to 1.1 upgrade preserves history/privileges",
+      "password rotation and cancelled rotation recovery",
+      "dump/restore includes partitions and identities; bounded retention; ambiguous provenance rejected",
+      "real physical recovery rejects collectors and permits historical reports"
+    ],
+    "seconds": 73.85
+  },
+  {
+    "version": "PostgreSQL 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+    "passed": 13,
+    "cases": [
+      "missing preload rejected before bootstrap",
+      "CREATEDB/CREATEROLE rejected",
+      "concurrent bootstrap serialized",
+      "name collision rejected",
+      "fresh install, TTY cancellation/resume, SCRAM, repeat install",
+      "runtime/reader/PUBLIC least privilege, wrong database, input validation",
+      "two-database workload, lock waits, idle blockers, sampling coverage, version adapters",
+      "HTML escaping, overlapping jobs, timeout atomicity",
+      "reset and intermediate evidence, statement cap, eviction, counter decreases",
+      "restart discontinuity, disabled timing, 1.0 to 1.1 upgrade preserves history/privileges",
+      "password rotation and cancelled rotation recovery",
+      "dump/restore includes partitions and identities; bounded retention; ambiguous provenance rejected",
+      "real physical recovery rejects collectors and permits historical reports"
+    ],
+    "seconds": 81.66
+  }
+]

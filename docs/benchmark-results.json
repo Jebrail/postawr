@@ -1,0 +1,97 @@
+{
+  "baseline": {
+    "duration_seconds": 15.073,
+    "transactions": 2054,
+    "throughput_tps": 136.27,
+    "p95_latency_ms": 30.8601,
+    "mean_latency_ms": 21.8613,
+    "storage_growth_bytes": 81920,
+    "collections": []
+  },
+  "enabled": {
+    "duration_seconds": 15.031,
+    "transactions": 2137,
+    "throughput_tps": 142.17,
+    "p95_latency_ms": 29.2534,
+    "mean_latency_ms": 21.0192,
+    "storage_growth_bytes": 2228224,
+    "collections": [
+      {
+        "job": "take_snapshot",
+        "milliseconds": 452.28671698714606
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 33.546671009389684
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 24.053964007180184
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 26.20475200819783
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 26.61080998950638
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 38.60929299844429
+      },
+      {
+        "job": "take_snapshot",
+        "milliseconds": 461.0526800097432
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 26.09471301548183
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 12.592535989824682
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 24.713482009246945
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 26.143861992750317
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 25.061635999009013
+      },
+      {
+        "job": "take_snapshot",
+        "milliseconds": 520.3748389903922
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 22.823136998340487
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 28.32019599736668
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 14.371883997227997
+      },
+      {
+        "job": "sample_activity",
+        "milliseconds": 19.434504996752366
+      }
+    ]
+  },
+  "method": {
+    "clients": 3,
+    "seconds_per_phase": 15,
+    "snapshot_period_seconds": 5,
+    "sample_period_seconds": 1,
+    "note": "Accelerated collection cadence for a short repeatable smoke benchmark, not a production overhead guarantee. Both phases retain preloaded pg_stat_statements."
+  },
+  "postgresql": "PostgreSQL 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit"
+}

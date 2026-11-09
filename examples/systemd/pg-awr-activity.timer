@@ -1,0 +1,9 @@
+[Unit]
+Description=pg_awr active-session sampling every 5 seconds (opt in)
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=5s
+AccuracySec=100ms
+Unit=pg-awr@activity.service
+[Install]
+WantedBy=timers.target

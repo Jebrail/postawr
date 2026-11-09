@@ -1,0 +1,16 @@
+# Install for a dedicated pgawr OS user. Adjust executable and passfile paths.
+# Debian/Ubuntu: /usr/lib/postgresql/18/bin; PGDG RPM: /usr/pgsql-18/bin.
+SHELL=/bin/sh
+PATH=/usr/lib/postgresql/18/bin:/usr/local/bin:/usr/bin:/bin
+PGHOST=127.0.0.1
+PGPORT=5432
+PGDATABASE=your_database
+PGUSER=your_collector
+PGPASSFILE=/etc/pg-awr/pgpass
+MAILTO=""
+# Send stderr to your scheduler's monitored log destination; cron itself has no durable job output.
+*/15 * * * * pg-awr-job snapshot >>/var/log/pg-awr/jobs.log 2>&1
+17 2 * * * pg-awr-job retention >>/var/log/pg-awr/jobs.log 2>&1
+# Opt-in sampling: serial 5-second slots; each invocation opens its own bounded transaction.
+# * * * * * flock -n /var/lib/pg-awr/activity.lock sh -c 'i=0; while [ "$i" -lt 12 ]; do pg-awr-job activity; sleep 5; i=$((i+1)); done' >>/var/log/pg-awr/jobs.log 2>&1
+# The cron loop includes job duration in its cadence; systemd gives a closer 5-second cadence.

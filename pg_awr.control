@@ -1,0 +1,8 @@
+comment = 'Historical PostgreSQL performance sampling and interval reports'
+default_version = '1.2'
+superuser = true
+trusted = false
+relocatable = false
+schema = 'awr'
+requires = 'pg_stat_statements'
+encoding = 'UTF8'

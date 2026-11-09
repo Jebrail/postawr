@@ -1,0 +1,138 @@
+{
+  "native_acceptance_groups": 56,
+  "native_results": [
+    {
+      "version": "PostgreSQL 15.19 (Ubuntu 15.19-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+      "package_format": "deb",
+      "passed": 7,
+      "cases": [
+        "native package paths, dependencies, no bootstrap or install hooks",
+        "CREATE EXTENSION in arbitrary database, custom dependency schema, no global roles",
+        "CASCADE, atomic prerequisite errors, unsafe schema rejection and DROP EXTENSION",
+        "explicit collector/reader grants, private helpers/history, snapshots, sampling and reports",
+        "packaged job honors PGDATABASE/PGUSER and runs a snapshot",
+        "dump/restore to a different database preserves configuration, partition data and sequences",
+        "1.0 \u2192 1.1 \u2192 1.2 upgrade retains history and runtime grants; upgraded dump restores"
+      ],
+      "seconds": 25.33
+    },
+    {
+      "version": "PostgreSQL 16.15 (Ubuntu 16.15-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+      "package_format": "deb",
+      "passed": 7,
+      "cases": [
+        "native package paths, dependencies, no bootstrap or install hooks",
+        "CREATE EXTENSION in arbitrary database, custom dependency schema, no global roles",
+        "CASCADE, atomic prerequisite errors, unsafe schema rejection and DROP EXTENSION",
+        "explicit collector/reader grants, private helpers/history, snapshots, sampling and reports",
+        "packaged job honors PGDATABASE/PGUSER and runs a snapshot",
+        "dump/restore to a different database preserves configuration, partition data and sequences",
+        "1.0 \u2192 1.1 \u2192 1.2 upgrade retains history and runtime grants; upgraded dump restores"
+      ],
+      "seconds": 25.34
+    },
+    {
+      "version": "PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+      "package_format": "deb",
+      "passed": 7,
+      "cases": [
+        "native package paths, dependencies, no bootstrap or install hooks",
+        "CREATE EXTENSION in arbitrary database, custom dependency schema, no global roles",
+        "CASCADE, atomic prerequisite errors, unsafe schema rejection and DROP EXTENSION",
+        "explicit collector/reader grants, private helpers/history, snapshots, sampling and reports",
+        "packaged job honors PGDATABASE/PGUSER and runs a snapshot",
+        "dump/restore to a different database preserves configuration, partition data and sequences",
+        "1.0 \u2192 1.1 \u2192 1.2 upgrade retains history and runtime grants; upgraded dump restores"
+      ],
+      "seconds": 23.86
+    },
+    {
+      "version": "PostgreSQL 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+      "package_format": "deb",
+      "passed": 7,
+      "cases": [
+        "native package paths, dependencies, no bootstrap or install hooks",
+        "CREATE EXTENSION in arbitrary database, custom dependency schema, no global roles",
+        "CASCADE, atomic prerequisite errors, unsafe schema rejection and DROP EXTENSION",
+        "explicit collector/reader grants, private helpers/history, snapshots, sampling and reports",
+        "packaged job honors PGDATABASE/PGUSER and runs a snapshot",
+        "dump/restore to a different database preserves configuration, partition data and sequences",
+        "1.0 \u2192 1.1 \u2192 1.2 upgrade retains history and runtime grants; upgraded dump restores"
+      ],
+      "seconds": 25.33
+    },
+    {
+      "version": "PostgreSQL 15.19 (Ubuntu 15.19-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+      "package_format": "rpm",
+      "passed": 7,
+      "cases": [
+        "native package paths, dependencies, no bootstrap or install hooks",
+        "CREATE EXTENSION in arbitrary database, custom dependency schema, no global roles",
+        "CASCADE, atomic prerequisite errors, unsafe schema rejection and DROP EXTENSION",
+        "explicit collector/reader grants, private helpers/history, snapshots, sampling and reports",
+        "packaged job honors PGDATABASE/PGUSER and runs a snapshot",
+        "dump/restore to a different database preserves configuration, partition data and sequences",
+        "1.0 \u2192 1.1 \u2192 1.2 upgrade retains history and runtime grants; upgraded dump restores"
+      ],
+      "seconds": 26.27
+    },
+    {
+      "version": "PostgreSQL 16.15 (Ubuntu 16.15-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+      "package_format": "rpm",
+      "passed": 7,
+      "cases": [
+        "native package paths, dependencies, no bootstrap or install hooks",
+        "CREATE EXTENSION in arbitrary database, custom dependency schema, no global roles",
+        "CASCADE, atomic prerequisite errors, unsafe schema rejection and DROP EXTENSION",
+        "explicit collector/reader grants, private helpers/history, snapshots, sampling and reports",
+        "packaged job honors PGDATABASE/PGUSER and runs a snapshot",
+        "dump/restore to a different database preserves configuration, partition data and sequences",
+        "1.0 \u2192 1.1 \u2192 1.2 upgrade retains history and runtime grants; upgraded dump restores"
+      ],
+      "seconds": 27.33
+    },
+    {
+      "version": "PostgreSQL 17.11 (Ubuntu 17.11-1.pgdg26.04+2) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+      "package_format": "rpm",
+      "passed": 7,
+      "cases": [
+        "native package paths, dependencies, no bootstrap or install hooks",
+        "CREATE EXTENSION in arbitrary database, custom dependency schema, no global roles",
+        "CASCADE, atomic prerequisite errors, unsafe schema rejection and DROP EXTENSION",
+        "explicit collector/reader grants, private helpers/history, snapshots, sampling and reports",
+        "packaged job honors PGDATABASE/PGUSER and runs a snapshot",
+        "dump/restore to a different database preserves configuration, partition data and sequences",
+        "1.0 \u2192 1.1 \u2192 1.2 upgrade retains history and runtime grants; upgraded dump restores"
+      ],
+      "seconds": 24.33
+    },
+    {
+      "version": "PostgreSQL 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0, 64-bit",
+      "package_format": "rpm",
+      "passed": 7,
+      "cases": [
+        "native package paths, dependencies, no bootstrap or install hooks",
+        "CREATE EXTENSION in arbitrary database, custom dependency schema, no global roles",
+        "CASCADE, atomic prerequisite errors, unsafe schema rejection and DROP EXTENSION",
+        "explicit collector/reader grants, private helpers/history, snapshots, sampling and reports",
+        "packaged job honors PGDATABASE/PGUSER and runs a snapshot",
+        "dump/restore to a different database preserves configuration, partition data and sequences",
+        "1.0 \u2192 1.1 \u2192 1.2 upgrade retains history and runtime grants; upgraded dump restores"
+      ],
+      "seconds": 28.37
+    }
+  ],
+  "legacy_regression_groups": 13,
+  "final_payloads_match_source": [
+    "postgresql-15-pg-awr_1.2-1_all.deb",
+    "pg_awr_15-1.2-1.noarch.rpm",
+    "postgresql-16-pg-awr_1.2-1_all.deb",
+    "pg_awr_16-1.2-1.noarch.rpm",
+    "postgresql-17-pg-awr_1.2-1_all.deb",
+    "pg_awr_17-1.2-1.noarch.rpm",
+    "postgresql-18-pg-awr_1.2-1_all.deb",
+    "pg_awr_18-1.2-1.noarch.rpm"
+  ],
+  "rpm_compatibility": "RPM 4.18.2: all binary packages verified/extracted; PostgreSQL 18 package installed/removed in an isolated relocated tree",
+  "scope": "Package payloads tested on private PostgreSQL 15\u201318 builds on Ubuntu. No RHEL/PGDG server was installed; DNF dependency resolution was not exercised."
+}

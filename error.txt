@@ -1,0 +1,3 @@
+./pg-awr-install --host localhost --username postgres  -W
+Installer password: 
+pg-awr-install: Conflicting names without verified bootstrap provenance: awr

@@ -1,0 +1,15 @@
+[Unit]
+Description=pg_awr %i collection job
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pgawr
+Environment=PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=your_database PGUSER=your_collector PGPASSFILE=/etc/pg-awr/pgpass
+# PGDG RPM: use /usr/pgsql-18/bin/pg-awr-job instead.
+ExecStart=/usr/lib/postgresql/18/bin/pg-awr-job %i
+TimeoutStartSec=130
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

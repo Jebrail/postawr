@@ -1,0 +1,8 @@
+[Unit]
+Description=pg_awr daily bounded retention
+[Timer]
+OnCalendar=*-*-* 02:17:00 UTC
+Persistent=true
+Unit=pg-awr@retention.service
+[Install]
+WantedBy=timers.target

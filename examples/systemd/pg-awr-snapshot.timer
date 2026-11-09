@@ -1,0 +1,8 @@
+[Unit]
+Description=pg_awr cumulative snapshot every 15 minutes
+[Timer]
+OnCalendar=*-*-* *:00/15:00 UTC
+Persistent=true
+Unit=pg-awr@snapshot.service
+[Install]
+WantedBy=timers.target

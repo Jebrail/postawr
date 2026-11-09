@@ -1,0 +1,14 @@
+#!/bin/sh
+# libpq credentials belong in a mode-0600 passfile, never a command argument.
+set -eu
+case "${1-}" in
+ snapshot) sql='SELECT awr.take_snapshot();'; timeout=120s ;;
+ activity) sql='SELECT awr.sample_activity();'; timeout=4s ;;
+ retention) sql='SELECT awr.purge_expired();'; timeout=120s ;;
+ *) echo 'Usage: pg-awr-job snapshot|activity|retention' >&2; exit 2 ;;
+esac
+# Keep the legacy defaults, while allowing any database and existing login.
+# Prefer psql from the same PostgreSQL installation as this helper.
+bindir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -x "$bindir/psql" ]; then psql="$bindir/psql"; else psql=psql; fi
+exec "$psql" -X -v ON_ERROR_STOP=1 -d "${PGDATABASE:-awr}" -U "${PGUSER:-awr_user}" -At -c "BEGIN; SET LOCAL statement_timeout='$timeout'; SET LOCAL lock_timeout='2s'; SET LOCAL idle_in_transaction_session_timeout='10s'; $sql COMMIT;"

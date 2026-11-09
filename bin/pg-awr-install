@@ -1,0 +1,457 @@
+#!/usr/bin/env python3
+"""Secure, resumable pg_awr bootstrap. Python standard library + libpq only."""
+import argparse
+import ctypes as C
+import ctypes.util
+import getpass
+import json
+import os
+import sys
+import uuid
+import warnings
+from contextlib import contextmanager
+
+
+class Error(Exception):
+    pass
+
+
+pq = C.CDLL(ctypes.util.find_library('pq') or 'libpq.so.5')
+
+def bind(name, result, *args):
+    fn = getattr(pq, name)
+    fn.restype, fn.argtypes = result, args
+    return fn
+
+ptr = C.c_void_p
+char = C.c_char_p
+array = C.POINTER(char)
+connect = bind('PQconnectdbParams', ptr, array, array, C.c_int)
+status = bind('PQstatus', C.c_int, ptr)
+finish = bind('PQfinish', None, ptr)
+errmsg = bind('PQerrorMessage', char, ptr)
+execute = bind('PQexecParams', ptr, ptr, char, C.c_int, ptr, array, ptr, ptr, C.c_int)
+result_status = bind('PQresultStatus', C.c_int, ptr)
+result_error = bind('PQresultErrorMessage', char, ptr)
+ntuples = bind('PQntuples', C.c_int, ptr)
+nfields = bind('PQnfields', C.c_int, ptr)
+getvalue = bind('PQgetvalue', char, ptr, C.c_int, C.c_int)
+getisnull = bind('PQgetisnull', C.c_int, ptr, C.c_int, C.c_int)
+clear = bind('PQclear', None, ptr)
+encrypt = bind('PQencryptPasswordConn', ptr, ptr, char, char, char)
+freemem = bind('PQfreemem', None, ptr)
+pg_host = bind('PQhost', char, ptr)
+pg_hostaddr = bind('PQhostaddr', char, ptr)
+pg_port = bind('PQport', char, ptr)
+pg_user = bind('PQuser', char, ptr)
+
+
+def literal(s):
+    return "'" + s.replace("'", "''") + "'"
+
+
+class DB:
+    def __init__(self, params):
+        self.params = {k: str(v) for k, v in params.items() if v is not None}
+        keys = (char * (len(self.params) + 1))(*[k.encode() for k in self.params])
+        vals = (char * (len(self.params) + 1))(*[v.encode() for v in self.params.values()])
+        self.conn = connect(keys, vals, 0)
+        if not self.conn or status(self.conn):
+            msg = errmsg(self.conn).decode() if self.conn else 'libpq connection allocation failed'
+            self.close()
+            raise Error(msg.strip())
+        self.sql("SET search_path=pg_catalog,pg_temp")
+        self.sql("SET timezone='UTC'")
+        self.sql("SET statement_timeout='60s'")
+        self.sql("SET lock_timeout='5s'")
+        self.sql("SET idle_in_transaction_session_timeout='60s'")
+        self.sql("SET standard_conforming_strings=on")
+
+    def sql(self, query, *params):
+        values = (char * len(params))(*[None if p is None else str(p).encode() for p in params])
+        result = execute(self.conn, query.encode(), len(params), None, values, None, None, 0)
+        if not result:
+            raise Error(errmsg(self.conn).decode().strip())
+        try:
+            if result_status(result) not in (1, 2):
+                raise Error(result_error(result).decode().strip())
+            return [[None if getisnull(result, i, j) else getvalue(result, i, j).decode()
+                     for j in range(nfields(result))] for i in range(ntuples(result))]
+        finally:
+            clear(result)
+
+    def one(self, query, *params):
+        rows = self.sql(query, *params)
+        if not rows:
+            return None
+        return rows[0][0]
+
+    @contextmanager
+    def transaction(self):
+        self.sql('BEGIN')
+        try:
+            yield self
+            self.sql('COMMIT')
+        except BaseException:
+            self.sql('ROLLBACK')
+            raise
+
+    def close(self):
+        if getattr(self, 'conn', None):
+            finish(self.conn)
+            self.conn = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+
+def identity(db):
+    if db.one("SELECT bool_and(rolsuper) AND count(*)>0 FROM pg_roles WHERE rolname IN (session_user,current_user)") != 't':
+        raise Error('Session and effective roles must both be true superusers; CREATEDB/CREATEROLE are insufficient.')
+    if db.one('SELECT pg_is_in_recovery()') != 'f':
+        raise Error('A writable primary is required.')
+    version = int(db.one("SELECT current_setting('server_version_num')"))
+    if not 150000 <= version < 190000:
+        raise Error('PostgreSQL 15–18 is required.')
+    return db.sql("SELECT system_identifier::text,pg_postmaster_start_time()::text,(pg_control_checkpoint()).timeline_id::text,coalesce(inet_server_addr()::text,''),coalesce(inet_server_port()::text,'') FROM pg_control_system()")[0]
+
+
+def pinned(db, expected):
+    if identity(db) != expected:
+        raise Error('Cluster or primary identity changed. Reconcile and rerun the installer.')
+
+
+def preflight(db, version):
+    if db.one("SELECT count(*) FROM pg_available_extension_versions WHERE name='pg_awr' AND version=$1 AND superuser AND NOT trusted AND NOT relocatable AND schema='awr' AND 'pg_stat_statements'=ANY(requires)", version) != '1':
+        raise Error('Compatible pg_awr extension files are missing. Run make install with this server\'s pg_config.')
+    if not db.one("SELECT setting FROM pg_settings WHERE name='pg_stat_statements.max'"):
+        raise Error('pg_stat_statements is not preloaded. Append it to shared_preload_libraries and restart PostgreSQL.')
+    if db.one("SELECT current_setting('compute_query_id')") == 'off':
+        raise Error('compute_query_id must be auto or on.')
+
+
+ROLES = ('awr_owner', 'awr_reader', 'awr_executor', 'awr_user')
+TAG = 'pg_awr bootstrap v1 '
+
+
+def create_roles(db, token):
+    oids = {}
+    for role in ROLES:
+        db.sql(f'CREATE ROLE {role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT')
+        db.sql(f'COMMENT ON ROLE {role} IS ' + literal(TAG + token))
+        oids[role] = int(db.one('SELECT oid FROM pg_roles WHERE rolname=$1', role))
+    db.sql('GRANT pg_read_all_stats TO awr_owner')
+    db.sql('GRANT awr_executor,awr_reader TO awr_user')
+    db.sql("UPDATE awr_bootstrap.state SET role_oids=$1::jsonb,phase='roles'", json.dumps(oids))
+    return oids
+
+
+def require_empty_database(repo):
+    # FirstNormalObjectId is 16384 on PostgreSQL 15–18 (access/transam.h).
+    # Inspect every local OID catalog, including objects in system schemas;
+    # checking only user tables would miss functions, types, casts, etc.
+    catalogs = repo.sql("SELECT c.relname FROM pg_class c WHERE c.relnamespace='pg_catalog'::regnamespace AND c.relkind='r' AND NOT c.relisshared AND EXISTS (SELECT FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attname='oid') ORDER BY c.relname")
+    for name, in catalogs:
+        quoted = 'pg_catalog."' + name.replace('"', '""') + '"'
+        if repo.one(f'SELECT oid FROM {quoted} WHERE oid>=16384 LIMIT 1'):
+            raise Error('Database awr is not empty (' + name + ' contains user objects); existing objects were preserved.')
+    # Large objects can have explicitly chosen OIDs below FirstNormalObjectId;
+    # subscriptions are stored in a shared catalog, unlike other local objects.
+    if repo.one("SELECT EXISTS (SELECT FROM pg_largeobject_metadata) OR EXISTS (SELECT FROM pg_subscription WHERE subdbid=(SELECT oid FROM pg_database WHERE datname=current_database()))") == 't':
+        raise Error('Database awr is not empty (large objects or subscriptions); existing objects were preserved.')
+
+
+@contextmanager
+def empty_database(db, ident, params, requested):
+    if not requested or db.one("SELECT oid FROM pg_namespace WHERE nspname='awr_bootstrap'"):
+        yield None
+        return
+    row = db.sql("SELECT oid::text,datdba::text,datallowconn,datistemplate,datconnlimit,shobj_description(oid,'pg_database') FROM pg_database WHERE datname='awr'")
+    if not row:
+        yield None  # The usual fresh-install workflow still creates awr.
+        return
+    owner = db.one('SELECT oid::text FROM pg_roles WHERE rolname=session_user')
+    oid = row[0][0]
+    if row[0][1:] != [owner, 't', 'f', '-1', None]:
+        raise Error('--use-empty-database requires awr to be owned by the installer, allow connections, have no connection limit, not be a template, and have no provenance/comment. See docs/operations.md.')
+    if db.one("SELECT rolname FROM pg_roles WHERE rolname=ANY($1::text[]) LIMIT 1", '{'+','.join(ROLES)+'}'):
+        raise Error('Conflicting names: existing awr roles cannot be adopted with --use-empty-database.')
+    if db.one("SELECT EXISTS (SELECT FROM pg_db_role_setting WHERE setdatabase=$1::oid) OR EXISTS (SELECT FROM pg_database d CROSS JOIN LATERAL aclexplode(d.datacl) a WHERE d.oid=$1::oid AND a.grantee NOT IN (0,d.datdba))", oid) == 't':
+        raise Error('--use-empty-database requires awr to have no custom database settings or grants to other roles.')
+    with DB(dict(params, dbname='awr')) as repo:
+        pinned(repo, ident)
+        require_empty_database(repo)
+        try:
+            # Keep this inspection connection, block new connections, then reject
+            # existing sessions instead of terminating them or racing their DDL.
+            db.sql('ALTER DATABASE awr ALLOW_CONNECTIONS false')
+            if repo.one("SELECT EXISTS (SELECT FROM pg_stat_activity WHERE datid=$1::oid AND pid<>pg_backend_pid()) OR EXISTS (SELECT FROM pg_prepared_xacts WHERE database='awr')", oid) == 't':
+                raise Error('Database awr has other sessions or prepared transactions; disconnect them before using --use-empty-database.')
+            require_empty_database(repo)
+            pinned(db, ident)
+            yield oid
+        finally:
+            # A committed adoption changes the owner atomically with provenance.
+            # Before that commit, restore access on ordinary errors/cancellation.
+            if db.one("SELECT oid::text FROM pg_database WHERE datname='awr' AND oid=$1::oid AND datdba=$2::oid", oid, owner):
+                db.sql('ALTER DATABASE awr ALLOW_CONNECTIONS true')
+
+
+def metadata(db, ident, empty_database_oid=None):
+    owner = db.one("SELECT oid::text FROM pg_roles WHERE rolname=session_user")
+    schema = db.sql("SELECT nspowner::text,obj_description(oid,'pg_namespace') FROM pg_namespace WHERE nspname='awr_bootstrap'")
+    if not schema:
+        collisions = db.sql("SELECT 'role '||quote_ident(rolname) FROM pg_roles WHERE rolname=ANY($1::text[]) UNION ALL SELECT 'database '||quote_ident(datname) FROM pg_database WHERE datname='awr' AND oid IS DISTINCT FROM $2::oid", '{' + ','.join(ROLES) + '}', empty_database_oid)
+        if collisions:
+            raise Error('Conflicting names without verified bootstrap provenance: ' + ', '.join(r[0] for r in collisions) + '. The installer normally creates awr itself. For an empty database you created for this installation, rerun with --use-empty-database. Existing roles or populated databases require reconciliation; see docs/operations.md.')
+        with db.transaction():
+            pinned(db, ident)
+            token = str(uuid.uuid4())
+            db.sql('CREATE SCHEMA awr_bootstrap')
+            db.sql('REVOKE ALL ON SCHEMA awr_bootstrap FROM PUBLIC')
+            db.sql("COMMENT ON SCHEMA awr_bootstrap IS 'pg_awr protected bootstrap metadata v1'")
+            db.sql("CREATE TABLE awr_bootstrap.state(singleton boolean PRIMARY KEY CHECK(singleton),token text NOT NULL,system_id text NOT NULL,installer_oid oid NOT NULL,role_oids jsonb NOT NULL DEFAULT '{}',db_oid oid,phase text NOT NULL)")
+            db.sql('REVOKE ALL ON awr_bootstrap.state FROM PUBLIC')
+            db.sql("INSERT INTO awr_bootstrap.state VALUES(true,$1,$2,$3,'{}',NULL,'new')", token, ident[0], owner)
+            if empty_database_oid:
+                create_roles(db, token)
+                db.sql('ALTER DATABASE awr OWNER TO awr_owner')
+                db.sql('COMMENT ON DATABASE awr IS ' + literal(TAG + token))
+                db.sql('REVOKE ALL ON DATABASE awr FROM PUBLIC')
+                db.sql("UPDATE awr_bootstrap.state SET db_oid=$1::oid,phase='database'", empty_database_oid)
+    else:
+        if schema[0] != [owner, 'pg_awr protected bootstrap metadata v1']:
+            raise Error('Bootstrap metadata ownership/provenance mismatch; operator reconciliation required.')
+        for kind, query in [
+            ('schema', "SELECT count(*) FROM pg_namespace n CROSS JOIN LATERAL aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) a WHERE n.nspname='awr_bootstrap' AND a.grantee<>n.nspowner"),
+            ('table', "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE n.nspname='awr_bootstrap' AND (a.grantee<>c.relowner OR c.relowner<>$1::oid)")]:
+            if db.one(query, *([owner] if kind == 'table' else [])) != '0':
+                raise Error('Unprotected bootstrap metadata; operator reconciliation required.')
+    rows = db.sql('SELECT token,system_id,installer_oid::text,role_oids::text,db_oid::text,phase FROM awr_bootstrap.state')
+    if len(rows) != 1 or rows[0][1:3] != [ident[0], owner]:
+        raise Error('Bootstrap state identity mismatch; operator reconciliation required.')
+    return rows[0]
+
+
+def check_roles(db, state):
+    token, _, _, encoded, _, _ = state
+    oids = json.loads(encoded)
+    for role, oid in oids.items():
+        row = db.sql("SELECT oid::text,shobj_description(oid,'pg_authid'),rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls,rolinherit,rolcanlogin FROM pg_roles WHERE rolname=$1", role)
+        if not row or row[0][:2] != [str(oid), TAG + token] or row[0][2:8] != ['f','f','f','f','f','t'] or (role != 'awr_user' and row[0][8] != 'f'):
+            raise Error('Role identity or attributes changed: ' + role + '; operator reconciliation required.')
+    for role in ROLES:
+        if role not in oids and db.one('SELECT oid FROM pg_roles WHERE rolname=$1', role):
+            raise Error('Unrelated role collision: ' + role)
+    if oids:
+        memberships = db.sql("SELECT member::regrole::text,roleid::regrole::text,admin_option FROM pg_auth_members WHERE member IN (SELECT oid FROM pg_roles WHERE rolname=ANY($1::text[]))", '{'+','.join(ROLES)+'}')
+        if sorted(memberships) != sorted([['awr_owner','pg_read_all_stats','f'],['awr_user','awr_reader','f'],['awr_user','awr_executor','f']]):
+            raise Error('Unexpected role memberships; operator reconciliation required.')
+    return oids
+
+
+def bootstrap(db, state, ident):
+    token = state[0]
+    oids = check_roles(db, state)
+    if not oids:
+        with db.transaction():
+            pinned(db, ident)
+            oids = create_roles(db, token)
+    row = db.sql("SELECT oid::text,datdba::text,shobj_description(oid,'pg_database') FROM pg_database WHERE datname='awr'")
+    recorded = db.one('SELECT db_oid FROM awr_bootstrap.state')
+    if not row:
+        if recorded:
+            raise Error('Recorded database is missing; operator reconciliation required.')
+        pinned(db, ident)
+        db.sql("UPDATE awr_bootstrap.state SET phase='creating_database'")
+        # Deliberately standalone. A crash before tagging requires operator reconciliation.
+        db.sql('CREATE DATABASE awr OWNER awr_owner TEMPLATE template0 ALLOW_CONNECTIONS false')
+        with db.transaction():
+            pinned(db, ident)
+            db.sql('COMMENT ON DATABASE awr IS ' + literal(TAG + token))
+            db.sql("UPDATE awr_bootstrap.state SET db_oid=(SELECT oid FROM pg_database WHERE datname='awr'),phase='database'")
+    elif row[0] != [recorded, str(oids['awr_owner']), TAG + token]:
+        raise Error('Database ownership/provenance ambiguous; operator reconciliation required (database remains untouched).')
+    if state[5] != 'ready':
+        with db.transaction():
+            db.sql('REVOKE ALL ON DATABASE awr FROM PUBLIC')
+            db.sql('GRANT CONNECT ON DATABASE awr TO awr_reader,awr_executor')
+            db.sql('ALTER DATABASE awr SET timezone TO \'UTC\'')
+            db.sql('ALTER DATABASE awr ALLOW_CONNECTIONS true')
+
+
+def configure(repo, version, phase):
+    installed = repo.one("SELECT extversion FROM pg_extension WHERE extname='pg_awr'")
+    if installed:
+        if repo.one("SELECT extowner=(SELECT oid FROM pg_roles WHERE rolname=session_user) AND extnamespace='awr'::regnamespace FROM pg_extension WHERE extname='pg_awr'") != 't':
+            raise Error('Extension ownership/provenance mismatch; operator reconciliation required.')
+        if phase not in ('installed', 'ready', 'password_pending'):
+            raise Error('Extension exists without completed installation provenance; reconcile before continuing.')
+        return installed
+    with repo.transaction():
+        for name in ('awr', 'awr_stats'):
+            if repo.one('SELECT oid FROM pg_namespace WHERE nspname=$1', name):
+                raise Error('Unrelated schema collision: ' + name)
+        if repo.one("SELECT oid FROM pg_extension WHERE extname='pg_stat_statements'"):
+            raise Error('Unrelated pg_stat_statements installation in awr; reconcile before continuing.')
+        repo.sql('REVOKE ALL ON SCHEMA public FROM PUBLIC')
+        repo.sql('CREATE SCHEMA awr_stats AUTHORIZATION awr_owner')
+        repo.sql('REVOKE ALL ON SCHEMA awr_stats FROM PUBLIC')
+        repo.sql('CREATE EXTENSION pg_stat_statements SCHEMA awr_stats')
+        repo.sql('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA awr_stats FROM PUBLIC')
+        repo.sql('REVOKE ALL ON ALL TABLES IN SCHEMA awr_stats FROM PUBLIC')
+        repo.sql('GRANT USAGE ON SCHEMA awr_stats TO awr_owner')
+        repo.sql('GRANT SELECT ON ALL TABLES IN SCHEMA awr_stats TO awr_owner')
+        repo.sql('GRANT EXECUTE ON FUNCTION awr_stats.pg_stat_statements(boolean),awr_stats.pg_stat_statements_info() TO awr_owner')
+        repo.sql('GRANT EXECUTE ON FUNCTION pg_catalog.pg_control_system(),pg_catalog.pg_control_checkpoint() TO awr_owner')
+        repo.sql('CREATE EXTENSION pg_awr VERSION ' + literal(version))
+        repo.sql('ALTER DEFAULT PRIVILEGES FOR ROLE awr_owner REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC')
+        for role in ('awr_user','awr_reader','awr_executor'):
+            # Role settings apply to login sessions; scheduler also enforces transaction-local limits.
+            repo.sql(f"ALTER ROLE {role} IN DATABASE awr SET statement_timeout='60s'")
+            repo.sql(f"ALTER ROLE {role} IN DATABASE awr SET lock_timeout='2s'")
+            repo.sql(f"ALTER ROLE {role} IN DATABASE awr SET idle_in_transaction_session_timeout='60s'")
+        repo.sql('SELECT count(*) FROM awr_stats.pg_stat_statements(false)')
+    return version
+
+
+def validate(repo):
+    problems = []
+    if repo.one("SELECT datdba::regrole::text FROM pg_database WHERE datname='awr'") != 'awr_owner':
+        problems.append('database owner')
+    if repo.one("SELECT count(*) FROM pg_database d CROSS JOIN LATERAL aclexplode(coalesce(datacl,acldefault('d',datdba))) a WHERE datname='awr' AND grantee=0") != '0':
+        problems.append('PUBLIC database privileges')
+    if repo.one("SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE n.nspname IN ('awr','awr_stats') AND a.grantee=0") != '0':
+        problems.append('PUBLIC function privileges')
+    if repo.one("SELECT count(*) FROM pg_namespace n CROSS JOIN LATERAL aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) a WHERE n.nspname IN ('awr','awr_stats') AND (a.grantee=0 OR n.nspowner<>'awr_owner'::regrole)") != '0':
+        problems.append('schema privileges/owners')
+    if repo.one("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='awr' AND c.relkind IN ('r','p','S') AND c.relowner<>'awr_owner'::regrole") != '0':
+        problems.append('repository ownership')
+    for role in ('awr_user','awr_reader','awr_executor'):
+        if repo.one("SELECT has_schema_privilege($1,'awr','CREATE') OR has_schema_privilege($1,'awr_stats','USAGE,CREATE')", role) != 'f':
+            problems.append(role + ' schema privileges')
+        if repo.one("SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='pg_catalog' AND p.proname LIKE 'pg_stat_reset%' AND has_function_privilege($1,p.oid,'EXECUTE')", role) != '0':
+            problems.append(role + ' reset privileges')
+        if repo.one("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='awr' AND c.relkind IN ('r','p') AND has_table_privilege($1,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,SELECT')", role) != '0':
+            problems.append(role + ' direct table privileges')
+        if repo.one("SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='awr_stats' AND has_function_privilege($1,p.oid,'EXECUTE')", role) != '0':
+            problems.append(role + ' statistics-source privileges')
+    expected = {'awr_executor':{'take_snapshot','sample_activity','purge_expired'},
+                'awr_reader':{'list_snapshots','report_json','report_html'}}
+    expected['awr_user'] = expected['awr_executor'] | expected['awr_reader']
+    for role, names in expected.items():
+        actual = {r[0] for r in repo.sql("SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='awr' AND has_function_privilege($1,p.oid,'EXECUTE')", role)}
+        if actual != names:
+            problems.append(role + ' routine privileges')
+    if repo.one("SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='awr' AND (p.proowner<>'awr_owner'::regrole OR NOT ('search_path=pg_catalog, pg_temp'=ANY(p.proconfig)))") != '0':
+        problems.append('routine owner/search_path')
+    if problems:
+        raise Error('Installation validation failed: ' + ', '.join(problems))
+
+
+def set_password(db):
+    try:
+        with open('/dev/tty', 'w') as tty:
+            if not tty.isatty():
+                raise Error('A TTY is required for password entry.')
+            with warnings.catch_warnings():
+                warnings.simplefilter('error', getpass.GetPassWarning)
+                password = getpass.getpass('New password for awr_user: ', stream=tty)
+                confirm = getpass.getpass('Repeat password for awr_user: ', stream=tty)
+    except (OSError, getpass.GetPassWarning) as exc:
+        raise Error('A TTY is required for password entry; awr_user remains NOLOGIN.') from exc
+    if not password or password != confirm:
+        raise Error('Passwords are empty or do not match; awr_user remains NOLOGIN.')
+    verifier = encrypt(db.conn, password.encode(), b'awr_user', b'scram-sha-256')
+    del password, confirm
+    if not verifier:
+        raise Error('Client-side SCRAM verifier generation failed.')
+    try:
+        encoded = C.string_at(verifier).decode()
+    finally:
+        freemem(verifier)
+    db.sql("SET password_encryption='scram-sha-256'")
+    db.sql("SET log_statement='none'")
+    db.sql("SET log_min_error_statement='panic'")
+    try:
+        db.sql('ALTER ROLE awr_user PASSWORD ' + literal(encoded))
+    except Error as exc:
+        raise Error('Could not set the SCRAM verifier; awr_user remains NOLOGIN.') from None
+    finally:
+        del encoded
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host', default=os.environ.get('PGHOST', 'localhost'))
+    parser.add_argument('--port', default=os.environ.get('PGPORT', '5432'))
+    parser.add_argument('--username', default=os.environ.get('PGUSER', getpass.getuser()))
+    parser.add_argument('--maintenance-db', default='postgres', choices=['postgres'], help='fixed lock/provenance database')
+    parser.add_argument('--version', default='1.1', choices=['1.0','1.1'])
+    parser.add_argument('--rotate-password', action='store_true')
+    parser.add_argument('--upgrade', action='store_true')
+    parser.add_argument('--use-empty-database', action='store_true', help='initialize a pre-created, empty awr database owned by this installer account')
+    parser.add_argument('-W', '--password', action='store_true', help='prompt for installer connection password')
+    args = parser.parse_args(argv)
+    if ',' in args.host or ',' in args.port:
+        raise Error('Use one explicit primary endpoint, not a multi-host connection.')
+    params = dict(host=args.host,port=args.port,user=args.username,dbname='postgres',
+                  application_name='pg-awr-install',connect_timeout=10,target_session_attrs='read-write')
+    if args.password:
+        params['password'] = getpass.getpass('Installer password: ')
+    with DB(params) as db:
+        ident = identity(db)
+        if db.one('SELECT pg_try_advisory_lock(728301,0)') != 't':
+            raise Error('Another pg_awr installer holds the bootstrap lock in postgres. Retry after it completes.')
+        preflight(db, args.version)
+        params.update(host=pg_host(db.conn).decode(), port=pg_port(db.conn).decode(),user=pg_user(db.conn).decode())
+        address = pg_hostaddr(db.conn).decode()
+        if address:
+            params['hostaddr'] = address
+        with empty_database(db, ident, params, args.use_empty_database) as existing_oid:
+            state = metadata(db, ident, existing_oid)
+            bootstrap(db, state, ident)
+        pinned(db, ident)
+        params['dbname'] = 'awr'
+        with DB(params) as repo:
+            pinned(repo, ident)
+            phase = db.one('SELECT phase FROM awr_bootstrap.state')
+            version = configure(repo, args.version, phase)
+            # A crash between the repository commit and the metadata commit is intentionally ambiguous.
+            if phase not in ('ready','password_pending'):
+                db.sql("UPDATE awr_bootstrap.state SET phase='installed'")
+            if args.upgrade and version != args.version:
+                with repo.transaction():
+                    pinned(repo, ident)
+                    repo.sql('ALTER EXTENSION pg_awr UPDATE TO ' + literal(args.version))
+                    validate(repo)
+                version = args.version
+            validate(repo)
+            check_roles(db, metadata(db, ident))
+            ready = db.one("SELECT rolcanlogin AND rolpassword LIKE 'SCRAM-SHA-256$%' FROM pg_authid WHERE rolname='awr_user'") == 't'
+            if phase == 'ready' and ready and not args.rotate_password:
+                print(f'pg_awr {version} is healthy in database awr; existing password preserved.')
+                return 0
+            with db.transaction():
+                db.sql('ALTER ROLE awr_user NOLOGIN')
+                db.sql("UPDATE awr_bootstrap.state SET phase='password_pending'")
+            set_password(db)
+            pinned(db, ident)
+            pinned(repo, ident)
+            validate(repo)
+            with db.transaction():
+                db.sql('ALTER ROLE awr_user LOGIN')
+                db.sql("UPDATE awr_bootstrap.state SET phase='ready'")
+            print(f'pg_awr {version} installed and validated in database awr. awr_user LOGIN enabled with SCRAM.')
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (Error, KeyboardInterrupt, EOFError) as exc:
+        print('pg-awr-install: ' + (str(exc) or 'cancelled; any pending runtime login remains disabled'), file=sys.stderr)
+        sys.exit(1)
